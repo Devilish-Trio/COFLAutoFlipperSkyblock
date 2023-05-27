@@ -1,0 +1,3 @@
+﻿  flip.cpp
+C:\Users\dismay\source\repos\flip\flip\flip.cpp(225,14): error C2371: 'found': redefinition; different basic types
+C:\Users\dismay\source\repos\flip\flip\flip.cpp(214,22): message : see declaration of 'found'
