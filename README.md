@@ -1,4 +1,4 @@
-Converted from Python to C++ with GPT4. Added Async and Parallel programming for extra speed
+Converted from Python to C++ with GPT4. Added Async and task parallelism for extra speed
 
 # Packages
 * opencv4.2.2020.5.26
