@@ -1,3 +1,5 @@
+// Default Template Matching with OpenCV
+
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
@@ -10,12 +12,19 @@
 #include <Wbemidl.h>
 #include <string>
 #include <future>
+#include <omp.h> // Include the OpenMP header
+#include <mutex>
 
 
 using namespace std;
 using namespace cv;
 
 bool paused = false;
+
+static Mat lastCapturedMat;
+static std::chrono::steady_clock::time_point lastCaptureTime;
+static std::mutex captureMutex;
+static constexpr long long captureIntervalMs = 100; // Minimum interval between captures in milliseconds
 
 // Define region to search for the image
 Rect region(960, 430, 20, 20); //940, 417, 20, 20
@@ -38,8 +47,8 @@ int binsetY = 434; //434
 int consetX = 852; //852
 int consetY = 410; //410
 
-// Low Machine function to press Q and Beep Beeps
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
+// Low level keyboard hook to press Q and do da Beep Beeps
+LRESULT CALLBACK KeyboardProc(const int nCode, const WPARAM wParam, const LPARAM lParam)
 {
 	// Check if nCode is HC_ACTION, indicating that the message contains valid information, and if the message is a key down event (WM_KEYDOWN).
 	if (nCode == HC_ACTION && wParam == WM_KEYDOWN)
@@ -71,9 +80,8 @@ void save_image(const Mat& img, const std::string& output_path)
 	imwrite(output_path, img);
 }
 
-
 // Button Functions
-void click(int x, int y)
+void click(const int x, const int y)
 {
 	INPUT input[3] = {{0}};
 
@@ -122,21 +130,30 @@ void keyboard_hook()
 }
 
 // Convert a specified screen region to an OpenCV Mat object.
+// Static variables for caching
 Mat hwnd2mat(const Rect& region)
 {
-	// Get a handle to the entire screen/desktop.
-	const HWND desktop = GetDesktopWindow();
-	// Obtain the device context (DC) for the desktop window, allowing drawing operations.
-	const HDC desktop_dc = GetDC(desktop);
-	// Create a compatible device context in memory, matching the desktop context.
-	const HDC capture_dc = CreateCompatibleDC(desktop_dc);
+	std::lock_guard<std::mutex> lock(captureMutex); // Ensure thread safety
 
-	const HBITMAP capture_bitmap = CreateCompatibleBitmap(desktop_dc, region.width, region.height);
+	// Check if we should update the capture
+	auto now = std::chrono::steady_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastCaptureTime).count();
+
+	if (elapsed < captureIntervalMs && !lastCapturedMat.empty())
+	{
+		// Return cached image if interval hasn't passed
+		return lastCapturedMat.clone(); // Clone to ensure caller gets a fresh Mat they can modify
+	}
+
+	// Initialize variables for capture process
+	HWND desktop = GetDesktopWindow();
+	HDC desktop_dc = GetDC(desktop);
+	HDC capture_dc = CreateCompatibleDC(desktop_dc);
+	HBITMAP capture_bitmap = CreateCompatibleBitmap(desktop_dc, region.width, region.height);
+
 	SelectObject(capture_dc, capture_bitmap);
-	// Perform a bit-block transfer
 	BitBlt(capture_dc, 0, 0, region.width, region.height, desktop_dc, region.x, region.y, SRCCOPY | CAPTUREBLT);
 
-	// Initialize a BITMAPINFOHEADER structure
 	BITMAPINFOHEADER info_header = {0};
 	info_header.biSize = sizeof(BITMAPINFOHEADER);
 	info_header.biWidth = region.width;
@@ -145,13 +162,15 @@ Mat hwnd2mat(const Rect& region)
 	info_header.biBitCount = 24;
 	info_header.biCompression = BI_RGB;
 
-	// Create an OpenCV Mat object to hold the image data of the captured region.
 	Mat mat(region.height, region.width, CV_8UC3);
-	// Transfer the data from the captured bitmap into the OpenCV Mat object.
 	GetDIBits(capture_dc, capture_bitmap, 0, region.height, mat.data, reinterpret_cast<BITMAPINFO*>(&info_header),
 	          DIB_RGB_COLORS);
 
-	// Clean up: release and delete the resources used for capturing and converting the screenshot.
+	// Update the cache with the new capture
+	lastCapturedMat = mat.clone(); // Clone to ensure cache stores a fresh copy
+	lastCaptureTime = now; // Update capture time
+
+	// Clean up resources used for this capture
 	DeleteObject(capture_bitmap);
 	DeleteDC(capture_dc);
 	ReleaseDC(desktop, desktop_dc);
@@ -159,100 +178,95 @@ Mat hwnd2mat(const Rect& region)
 	return mat;
 }
 
-// // Applies thresholding to an image and collects the locations of all pixels that exceed the threshold.
-void thresholding(const Mat& res, double threshold, vector<Point>& loc)
-{
-	Mat thresholded;
-	// Apply a binary threshold to the image. All pixels with a value greater than 'threshold' are set to 1, others to 0.
-	cv::threshold(res, thresholded, threshold, 1.0, THRESH_BINARY);
-	// Convert the thresholded image to an 8-bit unsigned integer type for easier processing.
-	thresholded.convertTo(thresholded, CV_8U);
 
-	/* Use OpenMP to parallelize the loop, iterating over all pixels in 'thresholded'.
-	'collapse(2)' combines the two nested for-loops into a single parallel loop.
-	 'shared(thresholded, loc)' specifies that the threads share the original image and location vector.*/
-#pragma omp parallel for collapse(2) shared(thresholded, loc) //omp parallel for collapse(2) shared(thresholded, loc)
-	for (int y = 0; y < thresholded.rows; y++)
-	{
-		for (int x = 0; x < thresholded.cols; x++)
-		{
-			// Check if the current pixel value is greater than 0 (meaning it passed the threshold).
-			if (thresholded.at<unsigned char>(y, x) > 0)
-			{
-				// 'omp critical' ensures that only one thread at a time can execute the code inside the block.
-				// This is necessary to prevent concurrent modifications of the 'loc' vector.
-#pragma omp critical
-				{
-					loc.emplace_back(x, y); // // Add the current pixel's coordinates to the 'loc' vector.
-				}
-			}
-		}
-	}
-}
-
-// Function to process a region of the image
-bool process_region(const Mat& img, int start_x, int end_x, int start_y, int end_y)
-{
-	for (int x = start_x; x < end_x; x++)
-	{
-		for (int y = start_y; y < end_y; y++)
-		{
-			auto bgr = img.at<Vec3b>(y, x);
-			const int b = bgr[0];
-			const int g = bgr[1];
-			const int r = bgr[2];
-
-			if (r_min <= r && r <= r_max && g_min <= g && g <= g_max && b_min <= b && b <= b_max)
-			{
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-
-bool multiscale_template_match(const Mat& img, const Mat& templ, Point& matchLoc, double matchThreshold = 0.2,
-                               double scaleStep = 0.9)
+// Process Color
+bool checkForSpecifiedColor(const Mat& img, const int r_min, const int r_max, const int g_min, const int g_max,
+                            const int b_min, const int b_max)
 {
 	bool found = false;
-	double maxVal = 0;
 
-	// Iterate over multiple scales, starting from 100% and decreasing.
-	for (double scale = 1.0; scale >= 0.5; scale *= scaleStep)
+#pragma omp parallel for collapse(2) // Parallelize both loops
+	for (int y = 0; y < img.rows && !found; ++y)
 	{
-		// Calculate the new size based on the current scale.
-		auto dsize = Size(templ.cols * scale, templ.rows * scale);
-		Mat resizedTempl; // To hold the resized template image.
-		resize(templ, resizedTempl, dsize); // Resize the template image.
-
-		// Skip this scale if the resized template is larger than the source image.
-		if (resizedTempl.rows > img.rows || resizedTempl.cols > img.cols) continue;
-
-		Mat result; // Store
-
-		// Perform template matching with the resized template.
-		matchTemplate(img, resizedTempl, result, TM_CCOEFF_NORMED);
-		// Find the maximum value and location in the result matrix.
-		minMaxLoc(result, nullptr, &maxVal, nullptr, &matchLoc);
-
-		// If the maximum value is greater than the threshold, a match has been found.
-		if (maxVal > matchThreshold)
+		for (int x = 0; x < img.cols && !found; ++x)
 		{
-			found = true;
-			matchLoc.x = static_cast<int>(matchLoc.x / scale);
-			matchLoc.y = static_cast<int>(matchLoc.y / scale);
-			break; // Exit early if a good match is found
+			auto pixelColor = img.at<Vec3b>(y, x);
+			int b = pixelColor[0];
+			int g = pixelColor[1];
+			int r = pixelColor[2];
+
+			if (r >= r_min && r <= r_max && g >= g_min && g <= g_max && b >= b_min && b <= b_max)
+			{
+#pragma omp critical // Ensure thread safety when writing to the shared variable
+				found = true;
+			}
 		}
 	}
-
 	return found;
 }
 
+// direct pixel comparison algo
+bool direct_pixel_comparison_with_scale(const Mat& img, const Mat& originalTemplate,
+                                        const double similarityThreshold = 0.99, const double scaleStep = 0.9,
+                                        const double minScale = 0.5, const double maxScale = 1.5)
+{
+	bool foundMatch = false;
+	double bestSimilarity = 0.0;
 
+	for (double scale = minScale; scale <= maxScale; scale *= scaleStep)
+	{
+		// Calculate new dimensions based on the current scale to ensure they are valid
+		Size newSize(static_cast<int>(originalTemplate.cols * scale), static_cast<int>(originalTemplate.rows * scale));
+
+		// Skip this scale if the new size is invalid or if the resized template would be larger than the source image
+		if (newSize.width <= 0 || newSize.height <= 0 || newSize.height > img.rows || newSize.width > img.cols)
+		{
+			continue;
+		}
+
+		// Resize the template according to the current scale
+		Mat templ;
+		resize(originalTemplate, templ, newSize, 0, 0, INTER_LINEAR);
+
+		int matchCount = 0;
+		int totalPixels = templ.rows * templ.cols;
+
+		// Perform direct pixel comparison at the current scale
+		for (int y = 0; y < templ.rows; ++y)
+		{
+			for (int x = 0; x < templ.cols; ++x)
+			{
+				// Assume both images are properly aligned; adjust indices if necessary
+				auto pixelTempl = templ.at<Vec3b>(y, x);
+				auto pixelImg = img.at<Vec3b>(y, x); // Direct indexing may need adjustment based on alignment
+
+				if (pixelTempl == pixelImg)
+				{
+					matchCount++;
+				}
+			}
+		}
+
+		double similarity = static_cast<double>(matchCount) / totalPixels;
+		bestSimilarity = max(similarity, bestSimilarity);
+
+		// Check if the current similarity meets the threshold
+		if (similarity >= similarityThreshold)
+		{
+			foundMatch = true;
+			break;
+		}
+	}
+
+	// For debugging or to adjust the similarity threshold dynamically
+	//cout << "Best similarity: " << bestSimilarity << '\n';
+
+	return foundMatch;
+}
+
+// Check for pause
 bool check_pause()
 {
-	// Check for pause
 	if (paused)
 	{
 		this_thread::sleep_for(chrono::milliseconds(100));
@@ -261,7 +275,8 @@ bool check_pause()
 	return false;
 }
 
-void buy_item(bool foundMatch)
+// Buy item
+void buy_item(const bool foundMatch)
 {
 	// Static function to buy and confirm purchase
 	if (foundMatch)
@@ -282,7 +297,7 @@ void buy_item(bool foundMatch)
 	}
 }
 
-// Unused debug code if need to use
+// Unused debug code 
 void debug(Mat img)
 {
 	// Example debug output
@@ -304,57 +319,23 @@ int main()
 	thread kb_hook_thread(keyboard_hook);
 	kb_hook_thread.detach();
 
-
 	while (true)
 	{
-		// Sleep and do nothing
 		if (check_pause()) continue;
 
-		// Take a screenshot of the specified region
 		Mat img = hwnd2mat(region);
-
-		// oopsie i'm an aquarius
 		if (img.empty())
 		{
 			cerr << "Failed to capture image." << '\n';
 			return 0;
 		}
 
-		constexpr int num_threads = 4; // Adjust based on your CPU
-		const int step_x = img.cols / num_threads;
-		// Calculate the width of each segment of the image to process separately.
-		vector<future<bool>> futures; // Create a vector to hold futures
-
-		// Divide the image into segments and process each segment in a separate asynchronous task.
-		for (int i = 0; i < num_threads; i++)
+		bool colorPresent = checkForSpecifiedColor(img, r_min, r_max, g_min, g_max, b_min, b_max);
+		if (colorPresent)
 		{
-			int start_x = i * step_x;
-			int end_x = (i + 1) * step_x;
-			// Make sure the last segment covers the remainder of the image.
-			if (i == num_threads - 1)
-			{
-				end_x = img.cols; // Ensure the last segment reaches the end of the image
-			}
-			// Launch an asynchronous task to process a segment of the image.
-			futures.push_back(async(launch::async, process_region, cref(img), start_x, end_x, 0, img.rows));
+			buy_item(true);
 		}
 
-		// Check results from futures
-		bool foundMatch = false;
-		for (auto& fut : futures)
-		{
-			if (fut.get()) // Check if the future returned true, indicating a match was found.
-			{
-				// If any future returns true
-				foundMatch = true;
-				break; // Stop once we've found a match
-			}
-		}
-
-		// If found, buy
-		buy_item(foundMatch);
-
-
-		//debug(img); // Optional: Debug Code
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 }
