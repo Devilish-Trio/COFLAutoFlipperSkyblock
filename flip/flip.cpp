@@ -1,5 +1,3 @@
-// Default Template Matching with OpenCV
-
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
@@ -33,6 +31,9 @@ Rect region(960, 430, 20, 20); //940, 417, 20, 20
 //string image_path_potato = "C:\\SB\\Images\\bigboss.png";
 string image_path_potato = R"(C:\SB\Images\javaw_eM8y2fmplN.png)";
 Mat template_img = imread(image_path_potato, IMREAD_COLOR);
+
+// Load the "potato" template image
+Mat potato_img = imread("path_to_potato_image.png", IMREAD_COLOR);
 
 // Buy RGB Values
 int r_min = 240, r_max = 255;
@@ -178,6 +179,18 @@ Mat hwnd2mat(const Rect& region)
 	return mat;
 }
 
+bool detectPotato(const Mat& img, const Mat& templ, double matchThreshold = 0.8) {
+	Mat result;
+	matchTemplate(img, templ, result, TM_CCOEFF_NORMED); // Perform template matching
+
+	double minVal, maxVal;
+	Point minLoc, maxLoc;
+	minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
+
+	return maxVal >= matchThreshold;
+}
+
+
 
 // Process Color
 bool checkForSpecifiedColor(const Mat& img, const int r_min, const int r_max, const int g_min, const int g_max,
@@ -310,29 +323,41 @@ void debug(Mat img)
 	this_thread::sleep_for(chrono::milliseconds(100)); // Adjust delay as needed
 }
 
-int main()
-{
+int main() {
 	cout << "Welcome dismay" << '\n';
 	this_thread::sleep_for(chrono::seconds(2));
-	cout << "Happy Flipping" << '\n';
+
+	string image_path_potato = R"(C:\SB\Images\javaw_eM8y2fmplN.png)";
+	potato_img = imread(image_path_potato, IMREAD_COLOR);
+	if (potato_img.empty()) {
+		cerr << "Failed to load potato image from path: " << image_path_potato << '\n';
+		return -1;
+	}
 
 	thread kb_hook_thread(keyboard_hook);
 	kb_hook_thread.detach();
 
-	while (true)
-	{
+	while (true) {
 		if (check_pause()) continue;
 
 		Mat img = hwnd2mat(region);
-		if (img.empty())
-		{
+		if (img.empty()) {
 			cerr << "Failed to capture image." << '\n';
-			return 0;
+			continue; // Skip this iteration
 		}
 
+		// Detect "potato" in the captured image
+		bool potatoDetected = detectPotato(img, potato_img, 0.8); // Adjust threshold as needed
+		if (potatoDetected) {
+			cout << "Potato detected!" << endl;
+			keybd_event(VK_ESCAPE, 0, 0, 0);
+			keybd_event(VK_ESCAPE, 0, KEYEVENTF_KEYUP, 0);
+			this_thread::sleep_for(chrono::milliseconds(150));
+		}
+
+		// Check for specific color
 		bool colorPresent = checkForSpecifiedColor(img, r_min, r_max, g_min, g_max, b_min, b_max);
-		if (colorPresent)
-		{
+		if (colorPresent) {
 			buy_item(true);
 		}
 
