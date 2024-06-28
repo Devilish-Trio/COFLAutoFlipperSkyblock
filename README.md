@@ -1,6 +1,5 @@
-# Automatic Image Recognition and Interaction
-
-This C++ project uses OpenCV and Windows API for automatic image recognition and interaction. It's designed to detect specific patterns or colors in a region of the screen and perform actions based on those detections.
+*# External COFL Auto Flipper
+Fully external C++ program which does not hook into Minecraft at all!
 
 ## Table of Contents
 1. [Features](#features)
@@ -11,11 +10,11 @@ This C++ project uses OpenCV and Windows API for automatic image recognition and
 
 ## Features
 
-- Screen capture of a specific region
+- Screen capture the area where buy is located
 - Template matching for image detection
-- Color detection within specified ranges
-- Automatic mouse clicking
-- Keyboard hook for pausing/resuming operations
+- Color detection within specified ranges using gray scale
+- Automatic mouse clicking to buy item
+- Keyboard hook for pausing/resuming the tool
 - Multi-threaded color checking for improved performance
 
 ## Dependencies
@@ -76,13 +75,11 @@ This C++ project uses OpenCV and Windows API for automatic image recognition and
 The `main` function sets up the environment and enters an infinite loop that:
 1. Captures the screen region
 2. Checks for the "potato" image
-3. Checks for specific colors
-4. Performs actions based on detections
-5. Sleeps briefly to control the loop rate
+3. Checks for specific colors (buy symbol)
+4. Performs the actions to buy or exit
 
 ## Usage
 If you can't figure it out, then idk, I guess that sounds like a you problem
 
 * Converted from Python to C++ with GPT4.
 * Added image cacheing and task parallelism for extra speed.
-* Fully external and does not hook into Minecraft at all!
