@@ -1,5 +1,5 @@
 # External COFL Auto Flipper
-Fully external C++ program which does not hook into Minecraft at all!
+Fully external C++ tool which does not hook into Minecraft at all!
 
 ## Table of Contents
 1. [Features](#features)
