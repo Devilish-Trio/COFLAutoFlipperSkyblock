@@ -5,10 +5,9 @@ This C++ project uses OpenCV and Windows API for automatic image recognition and
 ## Table of Contents
 1. [Features](#features)
 2. [Dependencies](#dependencies)
-3. [Key Components](#key-components)
-4. [Functions](#functions)
-5. [Main Loop](#main-loop)
-6. [Usage](#usage)
+3. [Functions](#functions)
+4. [Main Loop](#main-loop)
+5. [Usage](#usage)
 
 ## Features
 
@@ -24,14 +23,6 @@ This C++ project uses OpenCV and Windows API for automatic image recognition and
 - opencv4.2.2020.5.26
 - tbb.4.2.3.1
 - tbb.redist.4.2.3.1
-
-## Key Components
-
-- **Global Variables**: Store configuration settings and shared resources.
-- **Keyboard Hook**: Allows pausing/resuming the program with a key press.
-- **Screen Capture**: Efficiently captures a specific screen region.
-- **Image Processing**: Detects patterns and colors in captured images.
-- **Mouse Control**: Simulates mouse clicks at specified coordinates.
 
 ## Functions
 
