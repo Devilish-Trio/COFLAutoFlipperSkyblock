@@ -90,16 +90,8 @@ The `main` function sets up the environment and enters an infinite loop that:
 5. Sleeps briefly to control the loop rate
 
 ## Usage
-
-1. Set up the required dependencies.
-2. Adjust the global variables for your specific use case (screen coordinates, color ranges, etc.).
-3. Compile and run the program.
-4. Use the 'Q' key to pause/resume operations.
-
+If you can't figure it out, then idk, I guess that sounds like a you problem
 
 * Converted from Python to C++ with GPT4.
 * Added image cacheing and task parallelism for extra speed.
-* Fully external and does not hook into Minecraft at all! 
-
-# How to Use?
-If you can't figure it out, then idk, I guess that sounds like a you problem
+* Fully external and does not hook into Minecraft at all!
