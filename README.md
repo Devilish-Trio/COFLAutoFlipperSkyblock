@@ -81,5 +81,5 @@ The `main` function sets up the environment and enters an infinite loop that:
 ## Usage
 If you can't figure it out, then idk, I guess that sounds like a you problem
 
-* Converted from Python to C++ with GPT4.
+* Converted from Python to C++ with GPT4/GPTOmega/Claude Sonnet 3.5.
 * Added image cacheing and task parallelism for extra speed.
