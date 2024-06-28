@@ -96,8 +96,6 @@ The `main` function sets up the environment and enters an infinite loop that:
 3. Compile and run the program.
 4. Use the 'Q' key to pause/resume operations.
 
-**Note**: This program is designed for a specific use case and may require modifications for different scenarios. Always ensure you have permission to automate interactions with any software or service.
-
 
 * Converted from Python to C++ with GPT4.
 * Added image cacheing and task parallelism for extra speed.
