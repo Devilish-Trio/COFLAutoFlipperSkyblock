@@ -21,9 +21,9 @@ This C++ project uses OpenCV and Windows API for automatic image recognition and
 
 ## Dependencies
 
-- OpenCV
-- Windows API
-- C++11 or later
+- opencv4.2.2020.5.26
+- tbb.4.2.3.1
+- tbb.redist.4.2.3.1
 
 ## Key Components
 
@@ -100,11 +100,6 @@ The `main` function sets up the environment and enters an infinite loop that:
 * Converted from Python to C++ with GPT4.
 * Added image cacheing and task parallelism for extra speed.
 * Fully external and does not hook into Minecraft at all! 
-
-# Packages
-* opencv4.2.2020.5.26
-* tbb.4.2.3.1
-* tbb.redist.4.2.3.1
 
 # How to Use?
 If you can't figure it out, then idk, I guess that sounds like a you problem
